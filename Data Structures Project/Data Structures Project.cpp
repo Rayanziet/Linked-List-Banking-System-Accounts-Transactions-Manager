@@ -183,8 +183,123 @@ userList ReadFile(string filename) {
 
 
 
+const double DOLLAR_TO_EURO = 0.92;   
+const double DOLLAR_TO_LEBANESE_LIRA = 89500.0;
+const double EURO_TO_LEBANESE_LIRA = 97250.0; 
+const double EURO_TO_DOLLAR = 1.09;     
+const double LEBANESE_LIRA_TO_DOLLAR = 0.000011; 
+const double LEBANESE_LIRA_TO_EURO = 0.000010;  
+
+double convertCurrency(double amount, string fromCurrency, string toCurrency) {
+    if (fromCurrency == toCurrency) return amount;
+
+    if (fromCurrency == "$" && toCurrency == "Euro") {
+        return amount * DOLLAR_TO_EURO;
+    }
+    if (fromCurrency == "$" && toCurrency == "L.L") {
+        return amount * DOLLAR_TO_LEBANESE_LIRA;
+    }
+    if (fromCurrency == "Euro" && toCurrency == "$") {
+        return amount * EURO_TO_DOLLAR;
+    }
+    if (fromCurrency == "Euro" && toCurrency == "L.L") {
+        return amount * EURO_TO_LEBANESE_LIRA;
+    }
+    if (fromCurrency == "L.L" && toCurrency == "$") {
+        return amount * LEBANESE_LIRA_TO_DOLLAR;
+    }
+    if (fromCurrency == "L.L" && toCurrency == "Euro") {
+        return amount * LEBANESE_LIRA_TO_EURO;
+    }
+
+    cout << "Error: Unknown currency conversion" << endl;
+    return 0.0;
+}
+
+void trans(userList& ul, double amount, string amountCurrency, string fromIBAN, string toIBAN) {
+    user* currentUser = ul.head;
+    account* fromAccount = NULL;
+    account* toAccount = NULL;
+
+    while (currentUser) {
+        account* currentAccount = currentUser->acct;
+        while (currentAccount) {
+            if (currentAccount->IBAN == fromIBAN) {
+                fromAccount = currentAccount;
+            }
+            if (currentAccount->IBAN == toIBAN) {
+                toAccount = currentAccount;
+            }
+            if (fromAccount && toAccount) break;
+            currentAccount = currentAccount->next;
+        }
+        if (fromAccount && toAccount) break;
+        currentUser = currentUser->next;
+    }
+
+    if (!fromAccount || !toAccount) {
+        cout << "Error: One or both accounts not found." << endl;
+        return;
+    }
+
+    // Convert amount to source account's currency for balance check
+    double convertedWithdrawAmount = convertCurrency(amount, amountCurrency, fromAccount->currency);
+
+    if (convertedWithdrawAmount > fromAccount->balance) {
+        cout << "Error: Insufficient balance." << endl;
+        cout << "  Withdrawal Amount: " << convertedWithdrawAmount << " " << fromAccount->currency << endl;
+        cout << "  Current Balance: " << fromAccount->balance << " " << fromAccount->currency << endl;
+        return;
+    }
+
+    // Convert amount to destination account's currency
+    double depositAmount = convertCurrency(amount, amountCurrency, toAccount->currency);
+
+    cout << "Transfer Amount Details:" << endl;
+    cout << "  Original Amount: " << amount << " " << amountCurrency << endl;
+    cout << "  Converted Withdrawal Amount: " << convertedWithdrawAmount << " " << fromAccount->currency << endl;
+    cout << "  Converted Deposit Amount: " << depositAmount << " " << toAccount->currency << endl;
+
+    // Check deposit limit
+    if (depositAmount > toAccount->limitDepositPerDay) {
+        cout << "Error: Deposit amount exceeds daily limit." << endl;
+        cout << "  Deposit Amount: " << depositAmount << " " << toAccount->currency << endl;
+        cout << "  Daily Limit: " << toAccount->limitDepositPerDay << " " << toAccount->currency << endl;
+        return;
+    }
+
+    // Check withdrawal limit
+    if (convertedWithdrawAmount > fromAccount->limitWithdrawPerMonth) {
+        cout << "Error: Withdrawal amount exceeds monthly limit." << endl;
+        return;
+    }
+
+    // Perform transfer
+    fromAccount->balance -= convertedWithdrawAmount;
+    toAccount->balance += depositAmount;
+
+    // Create transactions
+    transaction* withdrawTxn = new transaction;
+    withdrawTxn->date = "17/12/2024";
+    withdrawTxn->amount = -convertedWithdrawAmount;
+    withdrawTxn->next = NULL;
+    AddTransactionToList(fromAccount, withdrawTxn);
+
+    transaction* depositTxn = new transaction;
+    depositTxn->date = "17/12/2024";
+    depositTxn->amount = depositAmount;
+    depositTxn->next = NULL;
+    AddTransactionToList(toAccount, depositTxn);
+
+    cout << "Transfer successful: "
+        << convertedWithdrawAmount << " " << fromAccount->currency
+        << " transferred from " << fromAccount->IBAN
+        << " to " << toAccount->IBAN
+        << " (" << depositAmount << " " << toAccount->currency << ")" << endl;
+}
+
+
 
 int main() {
-    cout << "Hello, World!" << endl;
     return 0;
 }
